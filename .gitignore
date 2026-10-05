@@ -1,0 +1,78 @@
+## .NET / C# / Visual Studio / Rider
+
+# Build outputs
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+[Pp]ublish/
+publish/
+artifacts/
+
+# .NET Core
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# NuGet
+*.nupkg
+*.snupkg
+**/packages/
+!**/packages/build/
+*.nuget.props
+*.nuget.targets
+nuget.exe
+
+# MSBuild
+*.binlog
+
+# Visual Studio
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+# Rider / JetBrains
+.idea/
+*.sln.iml
+
+# VS Code
+.vscode/
+!.vscode/extensions.json
+
+# Test results / coverage
+TestResults/
+[Tt]est[Rr]esult*/
+*.trx
+*.coverage
+*.coveragexml
+coverage*/
+CoverageReport/
+*.opencover.xml
+
+# Diagnostics / logs
+*.log
+*.tlog
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Secrets / local config
+*.pfx
+*.p12
+.env
+.env.*
+appsettings.*.local.json
+secrets.json
+launchSettings.json
+!**/Properties/launchSettings.json
+
+# Temp
+*.tmp
+*.temp
+*~
