@@ -1,10 +1,11 @@
-﻿using Application.Common.Interfaces;
+﻿using Application.Common.Interfaces.Queries;
+using Application.Common.Interfaces.Repositories;
 using Domain.PetPatients;
 using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.Persistence.Repositories;
 
-public class PetPatientRepository(ApplicationDbContext context) : IPetPatientRepository
+public class PetPatientRepository(ApplicationDbContext context) : IPetPatientRepository, IPetPatientQueries
 {
     public async Task<IReadOnlyList<PetPatient>> GetAll(CancellationToken cancellationToken)
     {

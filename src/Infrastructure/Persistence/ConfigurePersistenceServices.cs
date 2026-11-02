@@ -1,4 +1,5 @@
-using Application.Common.Interfaces;
+using Application.Common.Interfaces.Queries;
+using Application.Common.Interfaces.Repositories;
 using Infrastructure.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -36,6 +37,8 @@ public static class ConfigurePersistenceServices
     {
         services.AddScoped<PetPatientRepository>();
         services.AddScoped<IPetPatientRepository>(provider =>
+            provider.GetRequiredService<PetPatientRepository>());
+        services.AddScoped<IPetPatientQueries>(provider =>
             provider.GetRequiredService<PetPatientRepository>());
     }
 }
