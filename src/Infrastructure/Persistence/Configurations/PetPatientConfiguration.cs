@@ -11,6 +11,9 @@ public class PetPatientConfiguration : IEntityTypeConfiguration<PetPatient>
     {
         builder.HasKey(x => x.Id);
 
+        builder.Property(x => x.Id)
+            .HasConversion(x => x.Value, x => new PetPatientId(x));
+
         builder.Property(x => x.MicrochipId)
             .HasColumnType("varchar(255)")
             .IsRequired();

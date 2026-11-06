@@ -1,5 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
-using Domain.PetPatients;
+﻿using Domain.PetPatients;
 
 namespace Api.Dtos;
 
@@ -14,7 +13,7 @@ public record PetPatientDto(
 {
     public static PetPatientDto FromDomainModel(PetPatient petPatient)
         => new(
-            petPatient.Id,
+            petPatient.Id.Value,
             petPatient.Name,
             petPatient.Species,
             petPatient.AgeYears,
@@ -24,16 +23,16 @@ public record PetPatientDto(
 }
 
 public record CreatePetPatientDto(
-    [Required, MaxLength(255)] string MicrochipId,
-    [MaxLength(255)] string Name,
+    string MicrochipId,
+    string Name,
     Species Species,
-    [Range(1, 100)] int AgeYears,
-    [Required] bool IsVaccinated);
+    int AgeYears,
+    bool IsVaccinated);
     
     
 public record UpdatePetPatientDto(
-    [Required, MaxLength(255)] string MicrochipId,
-    [MaxLength(255)] string Name,
+    string MicrochipId,
+    string Name,
     Species Species,
-    [Range(1, 100)] int AgeYears,
-    [Required] bool IsVaccinated);
+    int AgeYears,
+    bool IsVaccinated);

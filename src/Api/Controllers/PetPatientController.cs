@@ -1,105 +1,101 @@
 ﻿using Api.Dtos;
-using Application.PetPatients.Services.Abstract;
+using Api.Modules.Errors;
+using Application.Common.Interfaces.Queries;
+using Application.PetPatients.Commands;
+using Domain.PetPatients;
+using MediatR;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Api.Controllers;
 
 [Route("pet-patients")]
 [ApiController]
-public class PetPatientController(IPetPatientService petPatientService) : ControllerBase
+public class PetPatientController(
+    ISender sender,
+    IPetPatientQueries petPatientQueries) : ControllerBase
 {
+    [HttpGet]
+    public async Task<ActionResult<IReadOnlyList<PetPatientDto>>> GetPetPatients(
+        CancellationToken cancellationToken)
+    {
+        var petPatients = await petPatientQueries.GetAll(cancellationToken);
+        return petPatients.Select(PetPatientDto.FromDomainModel).ToList();
+    }
+
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<PetPatientDto>> GetById(Guid id,
         CancellationToken cancellationToken)
     {
-        var petPatient = await petPatientService.GetById(id, cancellationToken);
-        if (petPatient is null)
-        {
-            return NotFound();
-        }
-        return PetPatientDto.FromDomainModel(petPatient);
+        var petPatient = await petPatientQueries.GetById(new PetPatientId(id), cancellationToken);
+
+        return petPatient.Match<ActionResult<PetPatientDto>>(
+            p => PetPatientDto.FromDomainModel(p),
+            () => NotFound());
     }
-    
+
+    [HttpGet("microchip-id/{microchipId}")]
+    public async Task<ActionResult<PetPatientDto>> GetPetPatientByMicrochipId(string microchipId,
+        CancellationToken cancellationToken)
+    {
+        var petPatient = await petPatientQueries.GetByMicrochipId(microchipId, cancellationToken);
+
+        return petPatient.Match<ActionResult<PetPatientDto>>(
+            p => PetPatientDto.FromDomainModel(p),
+            () => NotFound());
+    }
+
     [HttpPost]
     public async Task<ActionResult<PetPatientDto>> CreatePetPatient(
         [FromBody] CreatePetPatientDto request,
         CancellationToken cancellationToken)
     {
-        try
+        var input = new CreatePetPatientCommand
         {
-            var petPatient = await petPatientService.Add(
-                request.MicrochipId,
-                request.Name,
-                request.Species,
-                request.AgeYears,
-                request.IsVaccinated,
-                cancellationToken);
+            MicrochipId = request.MicrochipId,
+            Name = request.Name,
+            Species = request.Species,
+            AgeYears = request.AgeYears,
+            IsVaccinated = request.IsVaccinated
+        };
 
-            var dto = PetPatientDto.FromDomainModel(petPatient);
+        var result = await sender.Send(input, cancellationToken);
 
-            return CreatedAtAction(nameof(GetById), new { id = dto.Id }, dto);
-        }
-        catch (ArgumentException exception)
-        {
-            return Conflict(exception.Message);
-        }
+        return result.Match<ActionResult<PetPatientDto>>(
+            p => CreatedAtAction(nameof(GetById), new { id = p.Id.Value }, PetPatientDto.FromDomainModel(p)),
+            e => e.ToObjectResult());
     }
 
     [HttpPut("{id:guid}")]
-    public async Task<ActionResult<PetPatientDto>> UpdatePetPatient(Guid id, [FromBody] UpdatePetPatientDto request,
+    public async Task<ActionResult<PetPatientDto>> UpdatePetPatient(Guid id,
+        [FromBody] UpdatePetPatientDto request,
         CancellationToken cancellationToken)
     {
-        try
+        var input = new UpdatePetPatientCommand
         {
-            var petPatient = await petPatientService.Update(
-                id,
-                request.MicrochipId,
-                request.Name,
-                request.Species,
-                request.AgeYears,
-                request.IsVaccinated,
-                cancellationToken);
+            Id = id,
+            MicrochipId = request.MicrochipId,
+            Name = request.Name,
+            Species = request.Species,
+            AgeYears = request.AgeYears,
+            IsVaccinated = request.IsVaccinated
+        };
 
-            if (petPatient is null)
-            {
-                return NotFound();
-            }
+        var result = await sender.Send(input, cancellationToken);
 
-            return PetPatientDto.FromDomainModel(petPatient);
-        }
-        catch (ArgumentException exception)
-        {
-            return Conflict(exception.Message);
-        }
+        return result.Match<ActionResult<PetPatientDto>>(
+            p => PetPatientDto.FromDomainModel(p),
+            e => e.ToObjectResult());
     }
-    
-    [HttpGet("microchip-id/{microchipId}")]
-    public async Task<ActionResult<PetPatientDto>> GetPetPatientByMicrochipId(string microchipId,
-        CancellationToken cancellationToken)
-    {
-        var petPatient = await petPatientService.GetPetPatient(microchipId, cancellationToken);
-        if (petPatient is null)
-        {
-            return NotFound();
-        }
-        return PetPatientDto.FromDomainModel(petPatient);
-    }
-    
-    [HttpGet]
-    public async Task<ActionResult<IReadOnlyList<PetPatientDto>>> GetPetPatients(CancellationToken cancellationToken)
-    {
-        var petPatients = await petPatientService.GetPetPatients(cancellationToken);
-        return Ok(petPatients.Select(PetPatientDto.FromDomainModel));
-    }
-    
+
     [HttpDelete("{id:guid}")]
-    public async Task<ActionResult<bool>> DeletePetPatient(Guid id, CancellationToken cancellationToken)
+    public async Task<IActionResult> DeletePetPatient(Guid id,
+        CancellationToken cancellationToken)
     {
-        var result = await petPatientService.Delete(id, cancellationToken);
-        if (!result)
-        {
-            return NotFound();
-        }
-        return Ok(result);
+        var input = new DeletePetPatientCommand { Id = id };
+        var result = await sender.Send(input, cancellationToken);
+
+        return result.Match<IActionResult>(
+            _ => NoContent(),
+            e => e.ToObjectResult());
     }
 }

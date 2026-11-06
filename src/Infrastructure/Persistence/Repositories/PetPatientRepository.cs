@@ -1,24 +1,28 @@
-﻿using Application.Common.Interfaces;
+﻿using Application.Common.Interfaces.Queries;
+using Application.Common.Interfaces.Repositories;
 using Domain.PetPatients;
+using LanguageExt;
 using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.Persistence.Repositories;
 
-public class PetPatientRepository(ApplicationDbContext context) : IPetPatientRepository
+public class PetPatientRepository(ApplicationDbContext context) : IPetPatientRepository, IPetPatientQueries
 {
     public async Task<IReadOnlyList<PetPatient>> GetAll(CancellationToken cancellationToken)
     {
-        return await context.PetPatients.ToListAsync(cancellationToken);
+        return await context.PetPatients.AsNoTracking().ToListAsync(cancellationToken);
     }
 
-    public Task<PetPatient?> GetById(Guid id, CancellationToken cancellationToken)
+    public async Task<Option<PetPatient>> GetById(PetPatientId id, CancellationToken cancellationToken)
     {
-        return context.PetPatients.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+        var entity = await context.PetPatients.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+        return entity ?? Option<PetPatient>.None;
     }
 
-    public Task<PetPatient?> GetByMicrochipId(string microchipId, CancellationToken cancellationToken)
+    public async Task<Option<PetPatient>> GetByMicrochipId(string microchipId, CancellationToken cancellationToken)
     {
-        return context.PetPatients.FirstOrDefaultAsync(x => x.MicrochipId == microchipId, cancellationToken);
+        var entity = await context.PetPatients.FirstOrDefaultAsync(x => x.MicrochipId == microchipId, cancellationToken);
+        return entity ?? Option<PetPatient>.None;
     }
 
     public async Task<PetPatient> Add(PetPatient petPatient, CancellationToken cancellationToken)
