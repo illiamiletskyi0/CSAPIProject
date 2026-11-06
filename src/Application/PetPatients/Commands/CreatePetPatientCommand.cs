@@ -1,10 +1,12 @@
 using Application.Common.Interfaces.Repositories;
+using Application.PetPatients.Exceptions;
 using Domain.PetPatients;
+using LanguageExt;
 using MediatR;
 
 namespace Application.PetPatients.Commands;
 
-public record CreatePetPatientCommand : IRequest<PetPatient>
+public record CreatePetPatientCommand : IRequest<Either<PetPatientException, PetPatient>>
 {
     public required string MicrochipId { get; init; }
     public required string Name { get; init; }
@@ -14,23 +16,38 @@ public record CreatePetPatientCommand : IRequest<PetPatient>
 }
 
 public class CreatePetPatientCommandHandler(IPetPatientRepository petPatientRepository)
-    : IRequestHandler<CreatePetPatientCommand, PetPatient>
+    : IRequestHandler<CreatePetPatientCommand, Either<PetPatientException, PetPatient>>
 {
-    public async Task<PetPatient> Handle(CreatePetPatientCommand request, CancellationToken cancellationToken)
+    public async Task<Either<PetPatientException, PetPatient>> Handle(
+        CreatePetPatientCommand request,
+        CancellationToken cancellationToken)
     {
         var existingPetPatient = await petPatientRepository.GetByMicrochipId(request.MicrochipId,
             cancellationToken);
-        if (existingPetPatient is not null)
+
+        return await existingPetPatient.MatchAsync(
+            p => new PetPatientAlreadyExistsException(p.Id),
+            () => CreateEntity(request, cancellationToken));
+    }
+
+    private async Task<Either<PetPatientException, PetPatient>> CreateEntity(
+        CreatePetPatientCommand request,
+        CancellationToken cancellationToken)
+    {
+        try
         {
-            throw new ArgumentException($"Pet patient with microchip id '{request.MicrochipId}' already exists");
+            var petPatient = PetPatient.New(
+                PetPatientId.New(),
+                request.Name,
+                request.Species,
+                request.AgeYears,
+                request.IsVaccinated,
+                request.MicrochipId);
+            return await petPatientRepository.Add(petPatient, cancellationToken);
         }
-        var petPatient = PetPatient.New(
-            Guid.NewGuid(),
-            request.Name,
-            request.Species,
-            request.AgeYears,
-            request.IsVaccinated,
-            request.MicrochipId);
-        return await petPatientRepository.Add(petPatient, cancellationToken);
+        catch (Exception exception)
+        {
+            return new PetPatientUnhandledException(PetPatientId.Empty(), exception);
+        }
     }
 }

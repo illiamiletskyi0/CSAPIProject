@@ -1,6 +1,8 @@
 ﻿using Api.Dtos;
+using Api.Modules.Errors;
 using Application.Common.Interfaces.Queries;
 using Application.PetPatients.Commands;
+using Domain.PetPatients;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 
@@ -24,12 +26,11 @@ public class PetPatientController(
     public async Task<ActionResult<PetPatientDto>> GetById(Guid id,
         CancellationToken cancellationToken)
     {
-        var petPatient = await petPatientQueries.GetById(id, cancellationToken);
-        if (petPatient is null)
-        {
-            return NotFound();
-        }
-        return PetPatientDto.FromDomainModel(petPatient);
+        var petPatient = await petPatientQueries.GetById(new PetPatientId(id), cancellationToken);
+
+        return petPatient.Match<ActionResult<PetPatientDto>>(
+            p => PetPatientDto.FromDomainModel(p),
+            () => NotFound());
     }
 
     [HttpGet("microchip-id/{microchipId}")]
@@ -37,11 +38,10 @@ public class PetPatientController(
         CancellationToken cancellationToken)
     {
         var petPatient = await petPatientQueries.GetByMicrochipId(microchipId, cancellationToken);
-        if (petPatient is null)
-        {
-            return NotFound();
-        }
-        return PetPatientDto.FromDomainModel(petPatient);
+
+        return petPatient.Match<ActionResult<PetPatientDto>>(
+            p => PetPatientDto.FromDomainModel(p),
+            () => NotFound());
     }
 
     [HttpPost]
@@ -57,16 +57,12 @@ public class PetPatientController(
             AgeYears = request.AgeYears,
             IsVaccinated = request.IsVaccinated
         };
-        try
-        {
-            var petPatient = await sender.Send(input, cancellationToken);
-            var dto = PetPatientDto.FromDomainModel(petPatient);
-            return CreatedAtAction(nameof(GetById), new { id = dto.Id }, dto);
-        }
-        catch (ArgumentException exception)
-        {
-            return Conflict(exception.Message);
-        }
+
+        var result = await sender.Send(input, cancellationToken);
+
+        return result.Match<ActionResult<PetPatientDto>>(
+            p => CreatedAtAction(nameof(GetById), new { id = p.Id.Value }, PetPatientDto.FromDomainModel(p)),
+            e => e.ToObjectResult());
     }
 
     [HttpPut("{id:guid}")]
@@ -83,31 +79,23 @@ public class PetPatientController(
             AgeYears = request.AgeYears,
             IsVaccinated = request.IsVaccinated
         };
-        try
-        {
-            var petPatient = await sender.Send(input, cancellationToken);
-            if (petPatient is null)
-            {
-                return NotFound();
-            }
-            return PetPatientDto.FromDomainModel(petPatient);
-        }
-        catch (ArgumentException exception)
-        {
-            return Conflict(exception.Message);
-        }
+
+        var result = await sender.Send(input, cancellationToken);
+
+        return result.Match<ActionResult<PetPatientDto>>(
+            p => PetPatientDto.FromDomainModel(p),
+            e => e.ToObjectResult());
     }
 
     [HttpDelete("{id:guid}")]
-    public async Task<ActionResult<bool>> DeletePetPatient(Guid id,
+    public async Task<IActionResult> DeletePetPatient(Guid id,
         CancellationToken cancellationToken)
     {
         var input = new DeletePetPatientCommand { Id = id };
         var result = await sender.Send(input, cancellationToken);
-        if (!result)
-        {
-            return NotFound();
-        }
-        return Ok(result);
+
+        return result.Match<IActionResult>(
+            _ => NoContent(),
+            e => e.ToObjectResult());
     }
 }

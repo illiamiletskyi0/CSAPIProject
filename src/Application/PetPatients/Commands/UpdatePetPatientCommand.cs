@@ -1,10 +1,13 @@
 using Application.Common.Interfaces.Repositories;
+using Application.PetPatients.Exceptions;
 using Domain.PetPatients;
+using LanguageExt;
 using MediatR;
+using Unit = LanguageExt.Unit;
 
 namespace Application.PetPatients.Commands;
 
-public record UpdatePetPatientCommand : IRequest<PetPatient?>
+public record UpdatePetPatientCommand : IRequest<Either<PetPatientException, PetPatient>>
 {
     public required Guid Id { get; init; }
     public required string MicrochipId { get; init; }
@@ -15,30 +18,52 @@ public record UpdatePetPatientCommand : IRequest<PetPatient?>
 }
 
 public class UpdatePetPatientCommandHandler(IPetPatientRepository petPatientRepository)
-    : IRequestHandler<UpdatePetPatientCommand, PetPatient?>
+    : IRequestHandler<UpdatePetPatientCommand, Either<PetPatientException, PetPatient>>
 {
-    public async Task<PetPatient?> Handle(UpdatePetPatientCommand request, CancellationToken cancellationToken)
+    public async Task<Either<PetPatientException, PetPatient>> Handle(
+        UpdatePetPatientCommand request,
+        CancellationToken cancellationToken)
     {
-        var petPatient = await petPatientRepository.GetById(request.Id, cancellationToken);
-        if (petPatient is null)
+        var petPatientId = new PetPatientId(request.Id);
+        var petPatient = await petPatientRepository.GetById(petPatientId, cancellationToken);
+
+        return await petPatient.MatchAsync(
+            p => CheckDuplicates(p.Id, request.MicrochipId, cancellationToken)
+                .BindAsync(_ => UpdateEntity(p, request, cancellationToken)),
+            () => new PetPatientNotFoundException(petPatientId));
+    }
+
+    private async Task<Either<PetPatientException, Unit>> CheckDuplicates(
+        PetPatientId currentPetPatientId,
+        string microchipId,
+        CancellationToken cancellationToken)
+    {
+        var petPatient = await petPatientRepository.GetByMicrochipId(microchipId, cancellationToken);
+
+        return petPatient.Match<Either<PetPatientException, Unit>>(
+            p => p.Id == currentPetPatientId ? Unit.Default : new PetPatientAlreadyExistsException(p.Id),
+            () => Unit.Default);
+    }
+
+    private async Task<Either<PetPatientException, PetPatient>> UpdateEntity(
+        PetPatient petPatient,
+        UpdatePetPatientCommand request,
+        CancellationToken cancellationToken)
+    {
+        try
         {
-            return null;
-        }
+            petPatient.UpdateDetails(
+                request.Name,
+                request.Species,
+                request.AgeYears,
+                request.IsVaccinated,
+                request.MicrochipId);
 
-        var petPatientWithSameMicrochipId = await petPatientRepository.GetByMicrochipId(
-            request.MicrochipId, cancellationToken);
-        if (petPatientWithSameMicrochipId is not null && petPatientWithSameMicrochipId.Id != request.Id)
+            return await petPatientRepository.Update(petPatient, cancellationToken);
+        }
+        catch (Exception exception)
         {
-            throw new ArgumentException($"PetPatient with microchip id '{request.MicrochipId}' already exists");
+            return new PetPatientUnhandledException(petPatient.Id, exception);
         }
-
-        petPatient.UpdateDetails(
-            request.Name,
-            request.Species,
-            request.AgeYears,
-            request.IsVaccinated,
-            request.MicrochipId);
-
-        return await petPatientRepository.Update(petPatient, cancellationToken);
     }
 }

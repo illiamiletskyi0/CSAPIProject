@@ -13,7 +13,7 @@ public record PetPatientDto(
 {
     public static PetPatientDto FromDomainModel(PetPatient petPatient)
         => new(
-            petPatient.Id,
+            petPatient.Id.Value,
             petPatient.Name,
             petPatient.Species,
             petPatient.AgeYears,
