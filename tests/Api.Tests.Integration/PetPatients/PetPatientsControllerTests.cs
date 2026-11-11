@@ -88,11 +88,28 @@ public class PetPatientsControllerTests : BaseIntegrationTest, IAsyncLifetime
         var response = await Client.PostAsJsonAsync(_createPetPatientRoute, request, JsonOptions);
 
         response.IsSuccessStatusCode.Should().BeFalse();
-        
+
         response.StatusCode.Should().Be(HttpStatusCode.Conflict);
-        
-        var dbPetPatient = await Context.PetPatients.SingleAsync(x => x.MicrochipId == _secondTestPetPatient.MicrochipId);
+
+        var dbPetPatient =
+            await Context.PetPatients.SingleAsync(x => x.MicrochipId == _secondTestPetPatient.MicrochipId);
         dbPetPatient.Id.Should().Be(_secondTestPetPatient.Id);
+    }
+
+    [Fact]
+    public async Task ShouldNotCreatePetPatientBecauseRequestIsInvalid()
+    {
+        var request = new CreatePetPatientDto(
+            _firstTestPetPatient.MicrochipId,
+            _firstTestPetPatient.Name,
+            _firstTestPetPatient.Species,
+            0,
+            _firstTestPetPatient.IsVaccinated);
+
+        var response = await Client.PostAsJsonAsync(_createPetPatientRoute, request, JsonOptions);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await Context.PetPatients.AsNoTracking().CountAsync()).Should().Be(1);
     }
 
     [Fact]
@@ -125,5 +142,89 @@ public class PetPatientsControllerTests : BaseIntegrationTest, IAsyncLifetime
         dbPetPatient.Species.Should().Be(request.Species);
         dbPetPatient.AgeYears.Should().Be(request.AgeYears);
         dbPetPatient.IsVaccinated.Should().Be(request.IsVaccinated);
+    }
+
+    [Fact]
+    public async Task ShouldNotUpdatePetPatientBecauseMicrochipIdAlreadyTaken()
+    {
+        await Context.PetPatients.AddAsync(_firstTestPetPatient);
+        await Context.SaveChangesAsync();
+
+        var request = new UpdatePetPatientDto(
+            _firstTestPetPatient.MicrochipId,
+            _firstTestPetPatient.Name,
+            _firstTestPetPatient.Species,
+            _firstTestPetPatient.AgeYears,
+            _firstTestPetPatient.IsVaccinated);
+
+        var response = await Client.PutAsJsonAsync(_updatePetPatientRoute, request, JsonOptions);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+
+        var dbPetPatients = await Context.PetPatients.AsNoTracking().ToListAsync();
+        dbPetPatients.Should().HaveCount(2);
+
+        var unchangedPetPatient = dbPetPatients.Single(x => x.Id == _firstTestPetPatient.Id);
+        unchangedPetPatient.MicrochipId.Should().Be(_firstTestPetPatient.MicrochipId);
+        unchangedPetPatient.Name.Should().Be(_firstTestPetPatient.Name);
+        unchangedPetPatient.Species.Should().Be(_firstTestPetPatient.Species);
+        unchangedPetPatient.AgeYears.Should().Be(_firstTestPetPatient.AgeYears);
+        unchangedPetPatient.IsVaccinated.Should().Be(_firstTestPetPatient.IsVaccinated);
+
+        var unchangedUpdatedPetPatient = dbPetPatients.Single(x => x.Id == _secondTestPetPatient.Id);
+        unchangedUpdatedPetPatient.MicrochipId.Should().Be(_secondTestPetPatient.MicrochipId);
+        unchangedUpdatedPetPatient.Name.Should().Be(_secondTestPetPatient.Name);
+        unchangedUpdatedPetPatient.Species.Should().Be(_secondTestPetPatient.Species);
+        unchangedUpdatedPetPatient.AgeYears.Should().Be(_secondTestPetPatient.AgeYears);
+        unchangedUpdatedPetPatient.IsVaccinated.Should().Be(_secondTestPetPatient.IsVaccinated);
+    }
+
+    [Fact]
+    public async Task ShouldNotUpdatePetPatientBecausePetPatientNotFound()
+    {
+        var request = new UpdatePetPatientDto(
+            _thirdTestPetPatient.MicrochipId,
+            _thirdTestPetPatient.Name,
+            _thirdTestPetPatient.Species,
+            _thirdTestPetPatient.AgeYears,
+            _thirdTestPetPatient.IsVaccinated);
+
+        var response = await Client.PutAsJsonAsync($"pet-patients/{Guid.NewGuid()}", request, JsonOptions);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+        var dbPetPatients = await Context.PetPatients.AsNoTracking().ToListAsync();
+        dbPetPatients.Should().ContainSingle();
+        dbPetPatients[0].Id.Should().Be(_secondTestPetPatient.Id);
+        dbPetPatients[0].MicrochipId.Should().Be(_secondTestPetPatient.MicrochipId);
+        dbPetPatients[0].Name.Should().Be(_secondTestPetPatient.Name);
+        dbPetPatients[0].Species.Should().Be(_secondTestPetPatient.Species);
+        dbPetPatients[0].AgeYears.Should().Be(_secondTestPetPatient.AgeYears);
+        dbPetPatients[0].IsVaccinated.Should().Be(_secondTestPetPatient.IsVaccinated);
+    }
+
+    [Fact]
+    public async Task ShouldDeletePetPatient()
+    {
+        var response = await Client.DeleteAsync(_updatePetPatientRoute);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await Context.PetPatients.AsNoTracking().AnyAsync(x => x.Id == _secondTestPetPatient.Id)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ShouldNotDeletePetPatientBecausePetPatientNotFound()
+    {
+        var response = await Client.DeleteAsync($"pet-patients/{Guid.NewGuid()}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+        var dbPetPatient = await Context.PetPatients.AsNoTracking().SingleAsync();
+        dbPetPatient.Id.Should().Be(_secondTestPetPatient.Id);
+        dbPetPatient.MicrochipId.Should().Be(_secondTestPetPatient.MicrochipId);
+        dbPetPatient.Name.Should().Be(_secondTestPetPatient.Name);
+        dbPetPatient.Species.Should().Be(_secondTestPetPatient.Species);
+        dbPetPatient.AgeYears.Should().Be(_secondTestPetPatient.AgeYears);
+        dbPetPatient.IsVaccinated.Should().Be(_secondTestPetPatient.IsVaccinated);
     }
 }
